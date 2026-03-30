@@ -1,0 +1,39 @@
+body {
+  text-align: center;
+}
+
+svg {
+  margin-top: 32px;
+  border: 1px solid #aaa;
+}
+
+.person rect {
+  fill: #fff;
+  stroke: steelblue;
+  stroke-width: 1px;
+}
+
+.person {
+  font: 14px sans-serif;
+  cursor: pointer;
+}
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 1.5px;
+}
+
+.btn-parents, .btn-children {
+    cursor: pointer;
+    stroke: #fff;
+    stroke-width: 1px;
+}
+
+.btn-parents:hover { fill: #2e59d9 !important; }
+.btn-children:hover { fill: #17a673 !important; }
+
+.btn-icon {
+    font-weight: bold;
+    user-select: none;
+}

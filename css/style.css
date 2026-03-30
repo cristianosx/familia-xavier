@@ -1,0 +1,51 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f7f6;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+header {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#chart {
+    background-color: white;
+    margin-top: 30px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.bar {
+    fill: #4e73df;
+    transition: fill 0.3s ease;
+}
+
+.bar:hover {
+    fill: #2e59d9;
+}
+
+.label {
+    font-size: 12px;
+    fill: #333;
+}
+
+.link {
+  fill: none;
+  stroke: #5bc0de;
+  stroke-width: 2px;
+}
+
+.node circle {
+  fill: #fff;
+  stroke: #0275d8;
+  stroke-width: 3px;
+}
+
+.node text {
+  font: 12px sans-serif;
+}

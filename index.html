@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualização com D3.js</title>
+    <link rel="stylesheet" href="css/estilo.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="./scripts/ged2json.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Dashboard de Dados Estático</h1>
+        <p>Exemplo prático utilizando D3.js</p>
+    </header>
+
+    <!--<main>
+        <div id="tree-container"></div>
+    </main>-->
+
+    <!--<script src="scripts/script.js"></script>-->
+<script>
+var treeData; // Armazena os dados originais
+var boxWidth = 150,
+    boxHeight = 40;
+
+// 1. Configuração de Zoom e Pan
+const zoom = d3.zoom()
+    .scaleExtent([0.1, 1])
+    .on('zoom', (event) => {
+        // Na v7 usamos event.transform
+        g.attr("transform", event.transform);
+    });
+
+const svg = d3.select("body").append("svg")
+    .attr('width', 1000)
+    .attr('height', 500)
+    .call(zoom);
+
+// Grupo principal que sofrerá o zoom/pan
+const g = svg.append('g');
+
+// Aplicar transformação inicial para evitar o "pulo" no primeiro clique
+const initialTransform = d3.zoomIdentity.translate(150, 200);
+svg.call(zoom.transform, initialTransform);
+//svg.call(zoom.transform, d3.zoomIdentity.translate(width/2, height/2).scale(0.8));
+
+// 2. Definição do Layout da Árvore
+const treeLayout = d3.tree()
+    .nodeSize([boxWidth + 20, 150]) // Espaçamento horizontal e vertical entre gerações
+    .separation(() => 1);
+
+
+d3.json('data/familiaxavier.json').then(rawGedcom => {
+    
+    // Converte a estrutura flat do GEDCOM para a árvore recursiva
+    // "I1" seria o seu ID ou de quem você quer começar a árvore
+    const hierarchicalData = convertGedcomToD3Bidirectional(rawGedcom, "@I0026@");
+
+    // Agora usa os dados convertidos no seu código D3 v7
+    treeData = hierarchicalData;
+    draw();
+});
+// 3. Carregamento dos Dados (Fetch/Promise na v7)
+/*d3.json('data/data.json').then(json => {
+    
+    // Inicia com as gerações colapsadas conforme sua lógica original
+    if (json.children) {
+        json.children.forEach(gen2 => {
+            if (gen2.children) {
+                gen2.children.forEach(gen3 => {
+                    collapse(gen3);
+                });
+            }
+        });
+    }
+    treeData = json;
+    draw();
+    
+}).catch(error => {
+    console.error("Erro ao carregar o JSON:", error);
+});*/
+
+const duration = 750;
+
+function draw() {
+    const root = d3.hierarchy(treeData, d => {
+        let connections = [];
+        if (!d.parentsCollapsed && d._parents) connections = connections.concat(d._parents);
+        if (!d.childrenCollapsed && d._children) connections = connections.concat(d._children);
+        return connections;
+    });
+
+    treeLayout(root);
+    const nodes = root.descendants();
+    const links = root.links();
+
+    // --- SELEÇÃO DE NÓS ---
+    const node = g.selectAll("g.person")
+        .data(nodes, d => d.data.id);
+
+    // ENTER: Ponto de partida (nascendo do pai)
+    const nodeEnter = node.enter().append("g")
+        .attr("class", "person")
+        .attr("transform", d => {
+            const p = d.parent || {x: d.x, y: d.y};
+            const yPos = d.data.isAncestor ? -p.y : p.y;
+            return `translate(${p.x},${yPos}) scale(0.1)`; // Começa bem pequeno
+        })
+        .style("opacity", 0)
+        .on('click', (event, d) => togglePerson(d.data));
+
+    // Desenho dos elementos internos (retângulos, nomes, botões)
+    nodeEnter.append("rect")
+        .attr("x", -(boxWidth / 2))
+        .attr("y", -(boxHeight / 2))
+        .attr("width", boxWidth)
+        .attr("height", boxHeight)
+        .attr("rx", 5); // Cantos arredondados para um visual moderno
+
+    nodeEnter.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dy", 5)
+        .text(d => d.data.name);
+
+
+    // 1. Botão SUPERIOR (Ancestrais/Pais)
+    nodeEnter.append("circle")
+        .attr("cy", -(boxHeight / 2))
+        .attr("r", 8)
+        .style("fill", d => d.data._parents && d.data._parents.length > 0 ? "#4e73df" : "#ccc")
+        .on("click", (event, d) => {
+            if (d.data._parents.length > 0) {
+                event.stopPropagation();
+                d.data.parentsCollapsed = !d.data.parentsCollapsed;
+                draw();
+            }
+        });
+    
+    nodeEnter.append("text")
+        .attr("class", "btn-icon")
+        .attr("y", -(boxHeight / 2) + 4)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "10px")
+        .style("pointer-events", "none")
+        .text("▲");
+
+    // 2. Botão INFERIOR (Descendentes/Filhos)
+    nodeEnter.append("circle")
+        .attr("cy", (boxHeight / 2))
+        .attr("r", 8)
+        .style("fill", d => d.data._children && d.data._children.length > 0 ? "#1cc88a" : "#ccc")
+        .on("click", (event, d) => {
+            if (d.data._children.length > 0) {
+                event.stopPropagation();
+                d.data.childrenCollapsed = !d.data.childrenCollapsed;
+                draw();
+            }
+        });
+
+    nodeEnter.append("text")
+        .attr("class", "btn-icon")
+        .attr("y", (boxHeight / 2) + 4)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "10px")
+        .style("pointer-events", "none")
+        .text("▼");
+    
+    // UPDATE: A mágica da transição com Easing
+    const nodeUpdate = node.merge(nodeEnter);
+    
+    nodeUpdate.transition()
+        .duration(duration)
+        .ease(d3.easeBackOut.overshoot(1.2)) // 'overshoot' substituiu 'amplitude' no BackOut
+        .attr("transform", d => {
+            const yPos = d.data.isAncestor ? -d.y : d.y;
+            return `translate(${d.x},${yPos}) scale(1)`;
+        })
+        .style("opacity", 1);
+
+    /*nodeUpdate.transition()
+        .duration(duration)
+        .ease(d3.easeBackOut.amplitude(1.2)) // Efeito elástico
+        .attr("transform", d => {
+            const yPos = d.data.isAncestor ? -d.y : d.y;
+            return `translate(${d.x},${yPos}) scale(1)`; // Ganha tamanho e posição
+        })
+        .style("opacity", 1);*/
+
+    // EXIT: Encolhendo e voltando para o pai
+    node.exit().transition()
+        .duration(duration)
+        .ease(d3.easeBackIn) // Efeito de "recolhida" antes de sumir
+        .attr("transform", d => {
+            const p = d.parent || {x: d.x, y: d.y};
+            const yPos = d.data.isAncestor ? -p.y : p.y;
+            return `translate(${p.x},${yPos}) scale(0.1)`;
+        })
+        .style("opacity", 0)
+        .remove();
+
+    // --- SELEÇÃO DE LINKS ---
+    const link = g.selectAll("path.link")
+        .data(links, d => d.target.data.id);
+
+    const linkEnter = link.enter().insert("path", "g") // Insere atrás dos nós
+        .attr("class", "link")
+        .attr("d", d => {
+            const p = d.source;
+            const y = d.target.data.isAncestor ? -p.y : p.y;
+            const sY = d.target.data.isAncestor ? y - (boxHeight/2) : y + (boxHeight/2);
+            return `M${p.x},${sY} V${sY} H${p.x} V${sY}`;
+        })
+        .style("opacity", 0);
+
+    link.merge(linkEnter).transition()
+        .duration(duration)
+        .attr("d", elbow)
+        .style("opacity", 1);
+
+    link.exit().transition()
+        .duration(duration)
+        .attr("d", d => {
+            const p = d.source;
+            const y = d.target.data.isAncestor ? -p.y : p.y;
+            const sY = d.target.data.isAncestor ? y - (boxHeight/2) : y + (boxHeight/2);
+            return `M${p.x},${sY} V${sY} H${p.x} V${sY}`;
+        })
+        .style("opacity", 0)
+        .remove();
+}
+
+/*function draw() {
+    // Na v7, criamos a hierarquia primeiro
+    // Definimos os filhos usando sua lógica de person.children
+    const root = d3.hierarchy(treeData, d => {
+        let connections = [];
+        if (!d.parentsCollapsed && d._parents) connections = connections.concat(d._parents);
+        if (!d.childrenCollapsed && d._children) connections = connections.concat(d._children);
+        return connections;
+    });
+
+    treeLayout(root);
+    
+    const nodes = root.descendants();
+    const links = root.links();
+
+    // --- UPDATE NODES ---
+    const node = g.selectAll("g.person")
+        .data(nodes, d => d.data.id || d.data.name);
+
+    // REMOVE
+    node.exit().remove();
+
+    // ENTER
+    const nodeEnter = node.enter().append("g")
+        .attr("class", "person")
+        .on('click', (event, d) => togglePerson(d.data)); // d.data acessa o objeto original
+
+    nodeEnter.append("rect")
+        .attr("x", -(boxWidth / 2))
+        .attr("y", -(boxHeight / 2))
+        .attr("width", boxWidth)
+        .attr("height", boxHeight);
+
+    nodeEnter.append("text")
+        .attr("dx", -(boxWidth / 2) + 10)
+        .attr("dy", 5) // Pequeno ajuste para centralizar verticalmente
+        .attr("text-anchor", "start")
+        .attr('class', 'name')
+        .text(d => d.data.name);
+
+    // 1. Botão SUPERIOR (Ancestrais/Pais)
+    nodeEnter.append("circle")
+        .attr("cy", -(boxHeight / 2))
+        .attr("r", 8)
+        .style("fill", d => d.data._parents && d.data._parents.length > 0 ? "#4e73df" : "#ccc")
+        .on("click", (event, d) => {
+            if (d.data._parents.length > 0) {
+                event.stopPropagation();
+                d.data.parentsCollapsed = !d.data.parentsCollapsed;
+                draw();
+            }
+        });
+
+    nodeEnter.append("text")
+        .attr("class", "btn-icon")
+        .attr("y", -(boxHeight / 2) + 4)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "10px")
+        .style("pointer-events", "none")
+        .text("▲");
+
+    // 2. Botão INFERIOR (Descendentes/Filhos)
+    nodeEnter.append("circle")
+        .attr("cy", (boxHeight / 2))
+        .attr("r", 8)
+        .style("fill", d => d.data._children && d.data._children.length > 0 ? "#1cc88a" : "#ccc")
+        .on("click", (event, d) => {
+            if (d.data._children.length > 0) {
+                event.stopPropagation();
+                d.data.childrenCollapsed = !d.data.childrenCollapsed;
+                draw();
+            }
+        });
+
+    nodeEnter.append("text")
+        .attr("class", "btn-icon")
+        .attr("y", (boxHeight / 2) + 4)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "10px")
+        .style("pointer-events", "none")
+        .text("▼");
+
+    // MERGE & UPDATE POSITION
+    node.merge(nodeEnter)
+    // d.x é a largura (horizontal)
+    // -d.y inverte o sentido para crescer para cima
+        .attr("transform", d => {
+        // Se o nó faz parte do caminho de descendentes (_children), o Y permanece positivo.
+        // Se faz parte dos ancestrais (_parents), o Y fica negativo para subir.
+        
+        // Uma forma robusta é verificar se o pai deste nó (d.parent) 
+        // expandiu a partir do botão de cima ou de baixo.
+        
+        let yPos = d.y;
+        
+        // Lógica: Se este nó veio de um "_parents", ele sobe.
+        // Para simplificar, vamos considerar que d.depth (profundidade) 
+        // reflete a distância da raiz central.
+        
+        // Se você quer que os pais subam:
+        if (d.data.isAncestor) {
+            yPos = -d.y;
+        } else {
+            yPos = d.y;
+        }
+
+        return `translate(${d.x},${yPos})`;
+    });
+
+    // --- UPDATE LINKS ---
+    const link = g.selectAll("path.link")
+        .data(links, d => d.target.data.id || d.target.data.name);
+
+    link.exit().remove();
+
+    const linkEnter = link.enter().append("path")
+        .attr("class", "link")
+        .style("fill", "none")
+        .style("stroke", "#555")
+        .style("stroke-width", "1.5px");
+
+    link.merge(linkEnter)
+        .attr("d", elbow);
+}*/
+
+function toggleAncestors(person) {
+    person.parentsCollapsed = !person.parentsCollapsed;
+    draw();
+}
+
+function toggleDescendants(person) {
+    person.childrenCollapsed = !person.childrenCollapsed;
+    draw();
+}
+
+function togglePerson(person) {
+    if (person.collapsed) {
+        person.collapsed = false;
+    } else {
+        collapse(person);
+    }
+    draw();
+}
+
+function collapse(person) {
+    person.collapsed = true;
+    if (person._parents) {
+        person._parents.forEach(collapse);
+    }
+}
+
+function elbow(d) {
+    const isUp = d.target.data.isAncestor;
+    
+    // Inverte o sinal do Y apenas se for ancestral
+    const sourceX = d.source.x;
+    const sourceY = isUp ? -d.source.y : d.source.y;
+    const targetX = d.target.x;
+    const targetY = isUp ? -d.target.y : d.target.y;
+
+    // Ajuste do ponto de saída/entrada da caixa
+    const sY = isUp ? sourceY - (boxHeight / 2) : sourceY + (boxHeight / 2);
+    const tY = isUp ? targetY + (boxHeight / 2) : targetY - (boxHeight / 2);
+
+    return `M${sourceX},${sY}
+            V${(sY + tY) / 2}
+            H${targetX}
+            V${tY}`;
+}
+</script>
+</body>
+</html>
