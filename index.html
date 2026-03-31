@@ -7,12 +7,35 @@
     <link rel="stylesheet" href="css/estilo.css">
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="./scripts/ged2json.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 </head>
 <body>
     <header>
         <h1>Dashboard de Dados Estático</h1>
         <p>Exemplo prático utilizando D3.js</p>
     </header>
+
+    <nav id="top-menu">
+        <div class="logo">Genealogia v1.0</div>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Buscar antepassado...">
+            <div id="search-results"></div>
+        </div>
+    </nav>
+
+    <main id="app-container">
+        <div id="tree-canvas"></div>
+
+        <aside id="info-panel">
+            <button class="close-btn">&times;</button>
+            <div class="panel-content">
+            <img id="person-photo" src="" alt="Foto">
+            <h2 id="person-name">Nome do Familiar</h2>
+            <p><strong>Nascimento:</strong> <span id="person-birth"></span></p>
+            <p><strong>Bio:</strong> <span id="person-bio"></span></p>
+            </div>
+        </aside>
+    </main>
 
     <!--<main>
         <div id="tree-container"></div>
@@ -24,6 +47,10 @@ var treeData; // Armazena os dados originais
 var boxWidth = 150,
     boxHeight = 40;
 
+const container = d3.select("#tree-canvas");
+const width = container.node().getBoundingClientRect().width;
+const height = container.node().getBoundingClientRect().height;
+
 // 1. Configuração de Zoom e Pan
 const zoom = d3.zoom()
     .scaleExtent([0.1, 1])
@@ -32,17 +59,26 @@ const zoom = d3.zoom()
         g.attr("transform", event.transform);
     });
 
-const svg = d3.select("body").append("svg")
+const svg = container.append("svg")
+    .attr('width', '100%')
+    .attr('height', '100%')
+    .call(zoom);
+
+/*const svg = d3.select("body").append("svg")
     .attr('width', 1000)
     .attr('height', 500)
-    .call(zoom);
+    .call(zoom);*/
 
 // Grupo principal que sofrerá o zoom/pan
 const g = svg.append('g');
 
-// Aplicar transformação inicial para evitar o "pulo" no primeiro clique
-const initialTransform = d3.zoomIdentity.translate(150, 200);
+// Centralizar a árvore inicialmente
+const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8);
 svg.call(zoom.transform, initialTransform);
+
+// Aplicar transformação inicial para evitar o "pulo" no primeiro clique
+//const initialTransform = d3.zoomIdentity.translate(150, 200);
+//svg.call(zoom.transform, initialTransform);
 //svg.call(zoom.transform, d3.zoomIdentity.translate(width/2, height/2).scale(0.8));
 
 // 2. Definição do Layout da Árvore
@@ -81,6 +117,25 @@ d3.json('data/familiaxavier.json').then(rawGedcom => {
     console.error("Erro ao carregar o JSON:", error);
 });*/
 
+function showDetails(data) {
+    // Preenche os campos do aside
+    $('#person-name').text(data.name);
+    $('#person-birth').text(data.birth || "Data não disponível");
+    $('#person-bio').text(data.notes || "Sem biografia cadastrada.");
+    
+    // Mostra o painel adicionando a classe active
+    $('#info-panel').addClass('active');
+
+    // Opcional: Destaque visual no nó clicado
+    d3.selectAll(".person").classed("selected", false);
+    d3.select(`[data-id="${data.id}"]`).classed("selected", true);
+}
+
+// Evento para fechar o painel (jQuery)
+$('.close-btn').click(function() {
+    $('#info-panel').removeClass('active');
+});
+
 const duration = 750;
 
 function draw() {
@@ -102,13 +157,18 @@ function draw() {
     // ENTER: Ponto de partida (nascendo do pai)
     const nodeEnter = node.enter().append("g")
         .attr("class", "person")
+        .attr("data-id", d => d.data.id)
         .attr("transform", d => {
             const p = d.parent || {x: d.x, y: d.y};
             const yPos = d.data.isAncestor ? -p.y : p.y;
             return `translate(${p.x},${yPos}) scale(0.1)`; // Começa bem pequeno
         })
         .style("opacity", 0)
-        .on('click', (event, d) => togglePerson(d.data));
+        .on('click', (event, d) => {
+            // Se clicar no nó (não nos botões), abre detalhes
+            showDetails(d.data);
+        });
+        //.on('click', (event, d) => togglePerson(d.data));
 
     // Desenho dos elementos internos (retângulos, nomes, botões)
     nodeEnter.append("rect")
@@ -230,6 +290,22 @@ function draw() {
         })
         .style("opacity", 0)
         .remove();
+
+    $('#search-input').on('keypress', function(e) {
+        if(e.which == 13) { // Tecla Enter
+            const name = $(this).val().toLowerCase();
+            // Procura no treeData
+            const match = nodes.find(d => d.data.name.toLowerCase().includes(name));
+            if(match) {
+                // Move a câmera do D3 para o parente encontrado
+                svg.transition().duration(750).call(
+                    zoom.transform, 
+                    d3.zoomIdentity.translate(width/2 - match.x, height/2 - match.y).scale(1)
+                );
+                showDetails(match.data);
+            }
+        }
+    });
 }
 
 /*function draw() {

@@ -1,3 +1,45 @@
+#app-container {
+  display: flex;
+  height: calc(100vh - 60px); /* Desconta a altura do menu */
+  overflow: hidden;
+  position: relative;
+}
+
+#tree-canvas {
+    flex-grow: 1;
+    position: relative;
+    overflow: hidden;
+    background-color: #f8f9fc;
+}
+
+#tree-canvas svg {
+    cursor: grab;
+    width: 100%;
+    height: 100%;
+}
+
+/* Estilo para destacar o nó selecionado */
+.person.selected rect {
+    stroke: #4e73df;
+    stroke-width: 3px;
+}
+
+#info-panel {
+  width: 350px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  position: absolute;
+  right: -350px; /* Começa fora da tela */
+  transition: right 0.3s ease;
+  z-index: 10;
+  padding: 20px;
+}
+
+#info-panel.active {
+  right: 0; /* Desliza para dentro */
+}
+
 body {
   text-align: center;
 }
