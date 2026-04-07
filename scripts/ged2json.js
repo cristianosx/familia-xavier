@@ -9,6 +9,7 @@ function buildAncestryTree(flatList, rootId) {
     
     flatList.forEach(person => {
         personMap.set(person.id, { 
+            first_name: person.first_name,
             name: person.name, 
             id: person.id, 
             children: [] // Inicializamos o array que o D3 vai usar
@@ -78,11 +79,20 @@ function convertGedcomToD3Bidirectional(data, startId) {
     // 3. Função Recursiva para construir a estrutura aninhada
     function buildHierarchy(id, type = 'both') {
         const person = indis[id];
+        const birth = person.birth;
+        let aniversario = "";
         if (!person) return null;
+        if (birth) {
+            if (birth.date != null) {
+                aniversario = birth.date.day + "-" + birth.date.month + "-" + birth.date.year;
+            }
+        }
 
         const node = {
             id: id,
             name: person.name.replace(/\//g, ''),
+            first_name: person.first_name,
+            birth: aniversario,
             isAncestor: type === 'up', // Marca se é ancestral
             isDescendant: type === 'down', // Marca se é descendente
             _parents: [],
