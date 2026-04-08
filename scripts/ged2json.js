@@ -43,6 +43,30 @@ function buildAncestryTree(flatList, rootId) {
     return getAncestors(rootId);
 }
 
+function formatarData(dataString) {
+    // 1. Criar um objeto para mapear os meses
+    const meses = {
+        'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04',
+        'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08',
+        'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12'
+    };
+
+    // 2. Dividir a string pelo hífen
+    const partes = dataString.split('-'); // ["7", "FEB", "1984"]
+
+    // 3. Tratar o dia (garantir dois dígitos, ex: 7 vira 07)
+    const dia = partes[0].padStart(2, '0');
+
+    // 4. Buscar o número do mês no nosso mapa
+    const mes = meses[partes[1].toUpperCase()];
+
+    // 5. Pegar o ano
+    const ano = partes[2];
+
+    // 6. Retornar no formato desejado
+    return `${dia}/${mes}/${ano}`;
+}
+
 function convertGedcomToD3Bidirectional(data, startId) {
     const indis = data.individuals;
     const families = data.families;
@@ -84,7 +108,7 @@ function convertGedcomToD3Bidirectional(data, startId) {
         if (!person) return null;
         if (birth) {
             if (birth.date != null) {
-                aniversario = birth.date.day + "-" + birth.date.month + "-" + birth.date.year;
+                aniversario = formatarData(birth.date.day + "-" + birth.date.month + "-" + birth.date.year);
             }
         }
 
