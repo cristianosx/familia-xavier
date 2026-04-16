@@ -145,6 +145,170 @@ function convertGedcomToD3Bidirectional(data, startId) {
     return buildHierarchy(startId);
 }
 
+function convertGedcomToD3(data, startId) {
+    const indis = data.individuals;
+    const families = data.families;
+
+    // 1. Preparar os indivíduos
+    for (let id in indis) {
+        indis[id].id = id;
+        indis[id].parentsCollapsed = true;
+        indis[id].childrenCollapsed = true;
+        
+        // Mapear em quais famílias esta pessoa é pai/mãe (FAMS)
+        // e em qual família ela é filha (FAMC)
+        indis[id].fams = []; // Famílias que a pessoa criou (casamentos)
+    }
+
+    // 2. Mapear as famílias para saber quem é cônjuge de quem
+    for (let famId in families) {
+        const fam = families[famId];
+        if (fam.husband && indis[fam.husband]) indis[fam.husband].fams.push(famId);
+        if (fam.wife && indis[fam.wife]) indis[fam.wife].fams.push(famId);
+    }
+
+    // Função auxiliar para formatar data (mantendo sua lógica)
+    function getBirthDate(person) {
+        if (person.birth && person.birth.date) {
+            const d = person.birth.date;
+            return formatarData(`${d.day || ''}-${d.month || ''}-${d.year || ''}`);
+        }
+        return "";
+    }
+
+    // 3. Função Recursiva adaptada
+    function buildHierarchy(id, type = 'both') {
+        const person = indis[id];
+        if (!person) return null;
+
+        const node = {
+            id: id,
+            name: person.name.replace(/\//g, ''),
+            first_name: person.first_name,
+            birth: getBirthDate(person),
+            type: 'person', // Identificador de tipo
+            isAncestor: type === 'up',
+            isDescendant: type === 'down',
+            _parents: [],
+            _children: []
+        };
+
+        // --- SUBIR: Ancestrais (Pais) ---
+        // Na genealogia clássica, pais costumam aparecer direto, mas se quiser 
+        // nó de união para os avós, a lógica seria similar à de baixo.
+        if (type === 'both' || type === 'up') {
+            // Encontra a família onde esta pessoa é filha
+            const birthFamily = Object.values(families).find(f => (f.children || []).includes(id));
+            if (birthFamily) {
+                if (birthFamily.husband) node._parents.push(buildHierarchy(birthFamily.husband, 'up'));
+                if (birthFamily.wife) node._parents.push(buildHierarchy(birthFamily.wife, 'up'));
+            }
+        }
+
+        // --- DESCER: Descendentes (União + Filhos) ---
+        if (type === 'both' || type === 'down') {
+            (person.fams || []).forEach(famId => {
+                const fam = families[famId];
+                const spouseId = fam.husband === id ? fam.wife : fam.husband;
+                const spouse = indis[spouseId];
+
+                // Criamos o Nó de União intermediário
+                const unionNode = {
+                    id: famId,
+                    name: "União",
+                    type: 'union',
+                    isAncestor: false,
+                    isDescendant: true,
+                    spouseName: spouse ? spouse.name.replace(/\//g, '') : "Desconhecido",
+                    _children: []
+                };
+
+                // Adicionamos os filhos a este Nó de União
+                (fam.children || []).forEach(cId => {
+                    const cNode = buildHierarchy(cId, 'down');
+                    if (cNode) unionNode._children.push(cNode);
+                });
+
+                node._children.push(unionNode);
+            });
+        }
+
+        return node;
+    }
+
+    return buildHierarchy(startId);
+}
+
+function convertGedcomToGraph(data) {
+    const nodes = [];
+    const links = [];
+    const indis = data.individuals;
+    const families = data.families;
+
+    // 1. Criar os nós das PESSOAS
+    // Também calculamos uma geração aproximada para o alinhamento vertical
+    for (let id in indis) {
+        const person = indis[id];
+        nodes.push({
+            id: id,
+            name: person.name ? person.name.replace(/\//g, '') : "Sem Nome",
+            first_name: person.first_name || "Sem Nome",
+            birth: person.birth ? person.birth.date : "",
+            type: 'person',
+            // Opcional: Se seu JSON já tiver geração, use-o. 
+            // Caso contrário, o D3 tentará organizar sozinho.
+            generation: person.generation || 0 
+        });
+    }
+
+    // 2. Criar os nós de UNIÃO e os LINKS
+    for (let famId in families) {
+        const fam = families[famId];
+        const unionNodeId = `union_${famId}`;
+
+        // Criamos um nó virtual para representar o casamento/união
+        nodes.push({
+            id: unionNodeId,
+            type: 'union',
+            // A união fica na mesma geração dos pais
+            generation: indis[fam.husband]?.generation || 0 
+        });
+
+        // Link: Marido -> União
+        if (fam.husband && indis[fam.husband]) {
+            links.push({
+                source: fam.husband,
+                target: unionNodeId,
+                type: 'marriage'
+            });
+        }
+
+        // Link: Esposa -> União
+        if (fam.wife && indis[fam.wife]) {
+            links.push({
+                source: fam.wife,
+                target: unionNodeId,
+                type: 'marriage'
+            });
+        }
+
+        // Links: União -> Filhos
+        if (fam.children && fam.children.length > 0) {
+            fam.children.forEach(childId => {
+                if (indis[childId]) {
+                    links.push({
+                        source: unionNodeId,
+                        target: childId,
+                        type: 'child'
+                    });
+                }
+            });
+        }
+    }
+
+    return { nodes, links };
+}
+
 /*function convertGedcomToD3(data, startId) {
     const indis = data.individuals;
     const families = data.families;

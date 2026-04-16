@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualização com D3.js</title>
+    <link rel="stylesheet" href="css/estilo.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="./scripts/ged2json.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Dashboard de Dados Estático</h1>
+        <p>Exemplo prático utilizando D3.js</p>
+    </header>
+
+    <nav id="top-menu">
+        <div class="logo">Genealogia v1.0</div>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Buscar antepassado...">
+            <div id="search-results"></div>
+        </div>
+    </nav>
+
+    <main id="app-container">
+        <div id="tree-canvas"></div>
+
+        <aside id="info-panel">
+            <button class="close-btn">&times;</button>
+            <div class="panel-content">
+            <img id="person-photo" src="" alt="Foto">
+            <h2 id="person-name">Nome do Familiar</h2>
+            <p><strong>Nascimento:</strong> <span id="person-birth"></span></p>
+            <p><strong>Bio:</strong> <span id="person-bio"></span></p>
+            </div>
+        </aside>
+    </main>
+
+<script>
+
+var treeData; // Armazena os dados originais
+var boxWidth = 150,
+    boxHeight = 40;
+
+const container = d3.select("#tree-canvas");
+const width = container.node().getBoundingClientRect().width;
+const height = container.node().getBoundingClientRect().height;
+
+// 1. Configuração de Zoom e Pan
+const zoom = d3.zoom()
+    .scaleExtent([0.1, 1])
+    .on('zoom', (event) => {
+        // Na v7 usamos event.transform
+        g.attr("transform", event.transform);
+    });
+
+const svg = container.append("svg")
+    .attr('width', '100%')
+    .attr('height', '100%')
+    .call(zoom);
+
+const g = svg.append('g');
+
+// Centralizar a árvore inicialmente
+const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8);
+svg.call(zoom.transform, initialTransform);
+
+//const treeLayout = d3.tree()
+//    .nodeSize([boxWidth + 20, 150]) // Espaçamento horizontal e vertical entre gerações
+//    .separation(() => 1);
+
+d3.json('data/familiaxavier.json').then(rawGedcom => {
+    
+    // 1. Converte o GEDCOM para uma estrutura de Grafo (Nodes e Links)
+    // Você deve usar a nova função de conversão que retorna { nodes, links }
+    const graphData = convertGedcomToGraph(rawGedcom);
+
+    // 2. Chama a função de desenho passando os dados flat
+    // Não usamos mais o treeData recursivo
+    drawGraph(graphData);
+
+}).catch(error => {
+    console.error("Erro ao carregar ou converter o JSON:", error);
+});
+
+function drawGraph(graphData) {
+    // 1. Criar a simulação
+    const simulation = d3.forceSimulation(graphData.nodes)
+        .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(150))
+        .force("charge", d3.forceManyBody().strength(-1000)) // Repulsão entre nós
+        .force("x", d3.forceX(width / 2).strength(0.1))
+        .force("y", d3.forceY(d => d.generation * 300).strength(0.1)) // Trava a hierarquia no Y
+
+    // 2. Desenhar os Links (Caminhos)
+    const link = g.selectAll(".link")
+        .data(graphData.links)
+        .join("path")
+        .attr("class", "link")
+        .attr("fill", "none")
+        .attr("stroke", "#999");
+
+    // 3. Desenhar os Nós (Grupos)
+    const node = g.selectAll(".node")
+        .data(graphData.nodes)
+        .join("g")
+        .attr("class", d => `node ${d.type === 'union' ? 'union' : 'person'}`)
+        .call(d3.drag() // Permite arrastar os nós
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
+
+    // Adiciona os retângulos para pessoas (seu CSS já estiliza isso)
+    const personNodes = node.filter(d => d.type === 'person')
+    personNodes.append("rect")
+        .attr("width", boxWidth)
+        .attr("height", boxHeight)
+        .attr("x", -boxWidth / 2)
+        .attr("y", -boxHeight / 2)
+        .attr("rx", 5);
+    personNodes.append("text")
+        .attr("text-anchor", "middle") // Centraliza o texto horizontalmente
+        .attr("dy", ".35em") // Ajuste fino para centralizar o texto verticalmente
+        .style("fill", "#333") // Cor do texto
+        .style("font-size", "12px")
+        .style("pointer-events", "none") // Evita que o texto interfira no clique/drag
+        .text(d => d.first_name);
+
+    // Adiciona os círculos para uniões
+    node.filter(d => d.type === 'union').append("circle")
+        .attr("r", 6);
+
+    // 4. O Coração do Grafo: Função Tick
+    simulation.on("tick", () => {
+        // Atualiza as linhas (estilo curvo ou reto)
+        link.attr("d", d => {
+            return `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`;
+        });
+
+        // Atualiza a posição dos grupos de nós
+        node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+
+    // Funções de Drag (Padrão D3)
+    function dragstarted(event) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+    }
+    function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+    }
+    function dragended(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+    }
+}
+
+</script>
+</body>

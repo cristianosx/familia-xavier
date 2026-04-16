@@ -52,12 +52,25 @@ svg {
 .person rect {
   fill: #fff;
   stroke: steelblue;
-  stroke-width: 1px;
+  stroke-width: 2px;
 }
 
 .person {
   font: 14px sans-serif;
   cursor: pointer;
+}
+
+/* Nó de União */
+.union-node circle {
+    fill: #ff4d4d; /* Vermelho ou rosa para simbolizar a união */
+    stroke: #fff;
+    stroke-width: 1px;
+}
+
+/* Esconde os botões de expansão no nó de união se preferir */
+.union-node .btn-icon, 
+.union-node circle:not(:first-child) {
+    display: none;
 }
 
 .link {
